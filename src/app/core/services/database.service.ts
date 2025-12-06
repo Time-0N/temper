@@ -1,95 +1,162 @@
+// database.service.ts
 import { Injectable } from '@angular/core';
 import { Storage } from '@ionic/storage-angular';
+import { BehaviorSubject, Observable } from 'rxjs';
 import { CompletedSet, Exercise, ProgressPhoto, TrainingDay, TrainingPlan } from '../models/trainings-plan.model';
+import { MOCK_TRAINING_PLANS, MOCK_TRAINING_DAYS, MOCK_EXERCISES, MOCK_COMPLETED_SETS } from '../models/mock-trainings-plan.model';
 
 @Injectable({
   providedIn: 'root'
 })
 export class DatabaseService {
   private _storage: Storage | null = null;
+  private initPromise: Promise<void>;
+
+  private plans$ = new BehaviorSubject<TrainingPlan[]>([]);
+  private activePlan$ = new BehaviorSubject<TrainingPlan | null>(null);
 
   constructor(private storage: Storage) {
-    this.init();
+    this.initPromise = this.init();
   }
 
-  async init() {
+  private async init(): Promise<void> {
     this._storage = await this.storage.create();
   }
 
-  async getPlans(): Promise<TrainingPlan[]> {
-    return await this._storage?.get('training_plans') || [];
+  private async getStorage(): Promise<Storage> {
+    await this.initPromise;
+    return this._storage!;
   }
 
+  async initialize(useMockData = false): Promise<void> {
+    if (useMockData) {
+      await this.seedMockData();
+    }
+    await this.refreshPlans();
+  }
+
+  private async seedMockData(): Promise<void> {
+    const storage = await this.getStorage();
+    const existing = (await storage.get('training_plans')) || [];
+    if (existing.length > 0) return;
+
+    await storage.set('training_plans', MOCK_TRAINING_PLANS);
+    await storage.set('training_days', MOCK_TRAINING_DAYS);
+    await storage.set('exercises', MOCK_EXERCISES);
+    await storage.set('completed_sets', MOCK_COMPLETED_SETS);
+  }
+
+  private async refreshPlans(): Promise<void> {
+    const storage = await this.getStorage();
+    const plans = (await storage.get('training_plans')) || [];
+    this.plans$.next(plans);
+    this.activePlan$.next(plans.find((p: TrainingPlan) => p.is_active) || null);
+  }
+
+  // Reactive getters
+  getPlans(): Observable<TrainingPlan[]> {
+    return this.plans$.asObservable();
+  }
+
+  getActivePlan(): Observable<TrainingPlan | null> {
+    return this.activePlan$.asObservable();
+  }
+
+  // Plans
   async savePlan(plan: TrainingPlan): Promise<void> {
-    const plans = await this.getPlans();
-    plans.push(plan);
-    await this._storage?.set('training_plans', plans);
+    const storage = await this.getStorage();
+    const plans = [...this.plans$.value, plan];
+    await storage.set('training_plans', plans);
+    this.plans$.next(plans);
   }
 
   async updatePlan(plan: TrainingPlan): Promise<void> {
-    const plans = await this.getPlans();
-    const index = plans.findIndex(p => p.id === plan.id);
-    if (index !== -1) {
-      plans[index] = plan;
-      await this._storage?.set('training_plans', plans);
+    const storage = await this.getStorage();
+    const plans = this.plans$.value.map(p => p.id === plan.id ? plan : p);
+    await storage.set('training_plans', plans);
+    this.plans$.next(plans);
+
+    if (plan.is_active) {
+      this.activePlan$.next(plan);
+    } else if (this.activePlan$.value?.id === plan.id) {
+      this.activePlan$.next(null);
     }
   }
 
   async deletePlan(id: string): Promise<void> {
-    const plans = await this.getPlans();
-    const filtered = plans.filter(p => p.id !== id);
-    await this._storage?.set('training_plans', filtered);
+    const storage = await this.getStorage();
+    const plans = this.plans$.value.filter(p => p.id !== id);
+    await storage.set('training_plans', plans);
+    this.plans$.next(plans);
+
+    if (this.activePlan$.value?.id === id) {
+      this.activePlan$.next(null);
+    }
   }
 
-  async getDays(): Promise<TrainingDay[]> {
-    return await this._storage?.get('training_days') || [];
+  async setActivePlan(planId: string): Promise<void> {
+    const storage = await this.getStorage();
+    const plans = this.plans$.value.map(p => ({
+      ...p,
+      is_active: p.id === planId
+    }));
+    await storage.set('training_plans', plans);
+    this.plans$.next(plans);
+    this.activePlan$.next(plans.find(p => p.id === planId) || null);
   }
 
+  // Days
   async getDaysByPlan(planId: string): Promise<TrainingDay[]> {
-    const days = await this.getDays();
-    return days.filter(d => d.plan_id === planId);
+    const storage = await this.getStorage();
+    const days = (await storage.get('training_days')) || [];
+    return days.filter((d: TrainingDay) => d.plan_id === planId);
   }
 
   async saveDay(day: TrainingDay): Promise<void> {
-    const days = await this.getDays();
+    const storage = await this.getStorage();
+    const days = (await storage.get('training_days')) || [];
     days.push(day);
-    await this._storage?.set('training_days', days);
+    await storage.set('training_days', days);
   }
 
-  async getExercises(): Promise<Exercise[]> {
-    return await this._storage?.get('exercises') || [];
-  }
-
+  // Exercises
   async getExercisesByDay(dayId: string): Promise<Exercise[]> {
-    const exercises = await this.getExercises();
-    return exercises.filter(e => e.training_day_id === dayId);
+    const storage = await this.getStorage();
+    const exercises = (await storage.get('exercises')) || [];
+    return exercises.filter((e: Exercise) => e.training_day_id === dayId);
   }
 
   async saveExercise(exercise: Exercise): Promise<void> {
-    const exercises = await this.getExercises();
+    const storage = await this.getStorage();
+    const exercises = (await storage.get('exercises')) || [];
     exercises.push(exercise);
-    await this._storage?.set('exercises', exercises);
+    await storage.set('exercises', exercises);
   }
 
-  async getCompletedSets(): Promise<CompletedSet[]> {
-    return await this._storage?.get('completed_sets') || [];
+  // Completed Sets
+  async getCompletedSets(exerciseId: string): Promise<CompletedSet[]> {
+    const storage = await this.getStorage();
+    const sets = (await storage.get('completed_sets')) || [];
+    return sets.filter((s: CompletedSet) => s.exercise_id === exerciseId);
   }
 
   async saveCompletedSet(set: CompletedSet): Promise<void> {
-    const sets = await this.getCompletedSets();
+    const storage = await this.getStorage();
+    const sets = (await storage.get('completed_sets')) || [];
     sets.push(set);
-    await this._storage?.set('completed_sets', set);
+    await storage.set('completed_sets', sets);
   }
 
+  // Photos
   async getPhotos(): Promise<ProgressPhoto[]> {
-    return await this._storage?.get('progress_photos') || [];
+    const storage = await this.getStorage();
+    return (await storage.get('progress_photos')) || [];
   }
 
   async savePhoto(photo: ProgressPhoto): Promise<void> {
-    const photos = await this.getPhotos();
+    const storage = await this.getStorage();
+    const photos = (await storage.get('progress_photos')) || [];
     photos.push(photo);
-    await this._storage?.set('progress_photos', photos);
+    await storage.set('progress_photos', photos);
   }
-
 }
-

@@ -4,6 +4,7 @@ import { TrainingPlan } from '../core/models/trainings-plan.model';
 import { DatabaseService } from '../core/services/database.service';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
+import { Observable } from 'rxjs';
 
 @Component({
   selector: 'app-home',
@@ -18,17 +19,13 @@ import { RouterLink } from '@angular/router';
   ],
 })
 export class HomePage implements OnInit {
-  activePlan: TrainingPlan | null = null;
+  plan$: Observable<TrainingPlan | null>;
 
   constructor(private db: DatabaseService) {
+    this.plan$ = this.db.getActivePlan();
   }
 
   async ngOnInit() {
-    await this.loadActivePlan();
   }
 
-  async loadActivePlan() {
-    const plans = await this.db.getPlans();
-    this.activePlan = plans.find(p => p.is_active) || null;
-  }
 }

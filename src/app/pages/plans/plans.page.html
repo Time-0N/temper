@@ -5,10 +5,38 @@
 </ion-header>
 
 <ion-content [fullscreen]="true">
-  <ion-header collapse="condense">
-    <ion-toolbar>
-      <ion-title size="large">plans</ion-title>
-    </ion-toolbar>
-  </ion-header>
-  <h1>Test</h1>
+  <ion-grid>
+    <ion-row>
+
+      @for (plan of plans$ | async; track plan.id) {
+      <ion-col size="6" size-md="4">
+        <ion-card>
+          <ion-card-header>
+            <ion-card-title>{{ plan.name }}</ion-card-title>
+            <ion-card-subtitle>Plan länge: {{ plan.duration_days }} Tage</ion-card-subtitle>
+          </ion-card-header>
+
+          <ion-card-content>
+
+            @if (!plan.is_active) {
+            <ion-button size="small" expand="block" (click)="activatePlan($event, plan)">
+              Aktivieren
+            </ion-button>
+            }
+
+            @if (plan.is_active) {
+            <ion-badge>Active</ion-badge>
+            <span>Day {{ plan.current_day }} of {{ plan.duration_days }}</span>
+            <ion-progress-bar [value]="plan.current_day / plan.duration_days"></ion-progress-bar>
+            <p>Started {{ plan.start_date | date:'mediumDate' }}</p>
+
+            }
+          </ion-card-content>
+        </ion-card>
+      </ion-col>
+
+      }
+
+    </ion-row>
+  </ion-grid>
 </ion-content>

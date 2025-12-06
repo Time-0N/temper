@@ -11,21 +11,19 @@
     <h1>My App is work!</h1>
 
 
-    @if (activePlan) {
+    @if (plan$ | async; as plan) {
     <ion-card>
       <ion-card-header>
-        <ion-card-title>{{ activePlan.name }}</ion-card-title>
+        <ion-card-title>{{ plan.name }}</ion-card-title>
       </ion-card-header>
       <ion-card-content>
-        <p>Tag {{ activePlan.current_day }} von {{ activePlan.duration_days }}</p>
-        <ion-button expand="blcok" routerLink="/workout/{{ activePlan.id }}">
+        <p>Tag {{ plan.current_day }} von {{ plan.duration_days }}</p>
+        <ion-button expand="block" routerLink="/workout">
           Training starten
         </ion-button>
       </ion-card-content>
     </ion-card>
-    }
-
-    @if (!activePlan) {
+    } @else {
     <ion-card>
       <ion-card-header>
         <ion-card-title>No active plan!</ion-card-title>
@@ -33,7 +31,7 @@
       <ion-card-content>
         <p>Create a plan here:</p>
         <ion-button expand="block" routerLink="/plans">
-          <ion-icon slot="starten" name="add"></ion-icon>
+          <ion-icon slot="start" name="add"></ion-icon>
           Plan erstellen
         </ion-button>
       </ion-card-content>
